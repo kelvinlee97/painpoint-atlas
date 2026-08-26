@@ -53,7 +53,7 @@ python3 -m opportunity_radar build-pages
 3. 同一页的 Variables 添加 `OPENAI_MODEL`；不添加时默认使用 `gpt-5.6-luna`。
 4. Actions → Refresh and deploy Opportunity Radar → Run workflow。
 
-工作流会提交 `data/opportunity_radar.sqlite3` 和当天报告来保存增量状态；如果仓库公开，这些采集数据和分析报告也会公开，建议使用私有仓库。GitHub Pages 站点本身的公开性还取决于 GitHub 账户计划和仓库设置。
+工作流会提交 `data/opportunity_radar.sqlite3` 和当天报告来保存增量状态；本仓库公开后，这些采集数据和分析报告也会公开。当前提交和 SQLite 快照不包含 API key；不要把真实 key 写入代码、报告或静态页面，只通过 GitHub Actions Secret 配置。
 
 `run` 会在分析前重新执行来源探针。来源探针失败或缺少 API 配置时会停止，不会生成无证据报告。
 
