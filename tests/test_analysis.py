@@ -94,6 +94,42 @@ class AnalysisTests(unittest.TestCase):
         self.assertNotIn("temperature", calls[0][2])
         self.assertEqual(calls[0][2]["text"]["format"]["type"], "json_schema")
 
+    def test_openai_analyzer_rejects_quote_outside_review(self):
+        from opportunity_radar.analysis import AnalyzerError, OpenAIAnalyzer
+        from opportunity_radar.models import Review
+
+        def requester(url, headers, payload):
+            return {
+                "output_text": (
+                    '{"review_id":"app_store:review-1",'
+                    '"pain":"Exports fail",'
+                    '"affected_user":"Small teams",'
+                    '"context":"After creating a report",'
+                    '"severity":4,"paid_signal":0,'
+                    '"quote":"This text is not in the review.","confidence":0.9}'
+                )
+            }
+
+        analyzer = OpenAIAnalyzer(
+            api_key="test-key",
+            model="test-model",
+            requester=requester,
+        )
+        with self.assertRaises(AnalyzerError):
+            analyzer.analyze_review(
+                Review(
+                    store="app_store",
+                    external_id="review-1",
+                    app_external_id="123",
+                    rating=1,
+                    title="Broken",
+                    body="It fails.",
+                    published_at=None,
+                    version=None,
+                    source_url="https://example.test/review-1",
+                )
+            )
+
     def test_openai_analyzer_groups_evidence_into_clusters(self):
         from opportunity_radar.analysis import OpenAIAnalyzer
         from opportunity_radar.models import Evidence

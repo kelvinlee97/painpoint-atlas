@@ -67,6 +67,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.host, "127.0.0.1")
         self.assertEqual(args.port, 8000)
 
+    def test_dashboard_rejects_non_loopback_host(self):
+        from opportunity_radar.dashboard import serve_dashboard
+
+        with self.assertRaises(ValueError):
+            serve_dashboard(":memory:", host="0.0.0.0")
+
     def test_build_pages_defaults_to_static_output(self):
         from opportunity_radar.cli import build_parser
 
@@ -113,6 +119,11 @@ class CliTests(unittest.TestCase):
         self.assertIn("导出失败", html)
         self.assertIn("值得优先验证", html)
         self.assertIn('id="search"', html)
+        self.assertIn('class="skip-link"', html)
+        self.assertIn('aria-live="polite"', html)
+        self.assertIn('id="reset"', html)
+        self.assertIn("prefers-reduced-motion", html)
+        self.assertIn("<details", html)
 
 
 if __name__ == "__main__":
