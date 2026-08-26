@@ -125,6 +125,23 @@ class CliTests(unittest.TestCase):
         self.assertIn("prefers-reduced-motion", html)
         self.assertIn("<details", html)
 
+    def test_dashboard_shortens_long_product_descriptions(self):
+        from opportunity_radar.dashboard import render_dashboard
+
+        html = render_dashboard({
+            "summary": {"apps": 1, "reviews": 1, "evidence": 1, "opportunities": 1},
+            "opportunities": [{
+                "label": "导出失败",
+                "score": 72.5,
+                "decision": "值得优先验证",
+                "apps": [{"name": "Example", "description": "x" * 400}],
+                "evidence": [],
+            }],
+        })
+
+        self.assertIn("const shorten", html)
+        self.assertIn("esc(shorten(app.description", html)
+
 
 if __name__ == "__main__":
     unittest.main()

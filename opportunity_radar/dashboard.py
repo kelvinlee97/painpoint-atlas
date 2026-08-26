@@ -131,6 +131,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 const DATA = {data};
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[ch]));
 const safeHttpUrl = value => /^https?:\\/\\//i.test(String(value || '')) ? String(value) : '';
+const shorten = (value, limit = 280) => {{ const text = String(value ?? ''); return text.length > limit ? text.slice(0, limit - 1) + '…' : text; }};
 const number = value => Number(value || 0);
 const count = value => new Intl.NumberFormat('zh-CN').format(number(value));
 const scoreWidth = value => Math.min(100, Math.max(0, number(value)));
@@ -158,7 +159,7 @@ function render() {{
     const decision = item.decision || '待补充';
     const appMarkup = apps.length ? apps.map(app => {{
       const url = safeHttpUrl(app.url);
-      return `<article class="app"><div class="app-name"><strong>${{esc(app.name || '未命名 App')}}</strong><span class="muted"> · ${{esc(app.category || '未分类')}}</span></div><p>${{esc(app.description || '商店页未提供可核验的产品描述。')}}</p><p class="app-meta">开发者：${{esc(app.developer || '未提供')}} · 价格：${{esc(app.price || '未提供')}}</p>${{url ? `<a href="${{esc(url)}}" target="_blank" rel="noopener noreferrer">查看商店页 ↗</a>` : ''}}</article>`;
+      return `<article class="app"><div class="app-name"><strong>${{esc(app.name || '未命名 App')}}</strong><span class="muted"> · ${{esc(app.category || '未分类')}}</span></div><p>${{esc(shorten(app.description || '商店页未提供可核验的产品描述。'))}}</p><p class="app-meta">开发者：${{esc(app.developer || '未提供')}} · 价格：${{esc(app.price || '未提供')}}</p>${{url ? `<a href="${{esc(url)}}" target="_blank" rel="noopener noreferrer">查看商店页 ↗</a>` : ''}}</article>`;
     }}).join('') : '<p class="muted">暂无关联产品。</p>';
     const evidenceMarkup = evidence.length ? evidence.map(row => {{
       const url = safeHttpUrl(row.source_url);
