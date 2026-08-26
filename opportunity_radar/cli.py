@@ -131,30 +131,30 @@ def _analyze_and_report(args: argparse.Namespace) -> int:
             print("没有成功分析的评论，未生成报告。", file=sys.stderr)
             return 4
 
-        cluster_input = _select_cluster_evidence(
-            evidence, review_map, args.cluster_limit
-        )
+        cluster_input = _select_cluster_evidence(evidence, review_map, args.cluster_limit)
+        cluster_attempts = [cluster_input]
+        if len(cluster_input) > 20:
+            cluster_attempts.append(_select_cluster_evidence(evidence, review_map, 20))
+        if len(cluster_input) > 10:
+            cluster_attempts.append(_select_cluster_evidence(evidence, review_map, 10))
         if len(cluster_input) < len(evidence):
-            print(
-                f"仅使用受控样本 {len(cluster_input)} 条证据进行聚类。",
-                file=sys.stderr,
-            )
+            print(f"仅使用受控样本 {len(cluster_input)} 条证据进行聚类。", file=sys.stderr)
         evidence_map = {item.review_id: item for item in evidence}
         try:
-            try:
-                clusters = analyzer.cluster_evidence(cluster_input)
-            except AnalysisFormatError:
-                if len(cluster_input) <= 20:
-                    raise
-                fallback_limit = 20
-                print(
-                    f"聚类证据校验失败，降级重试前 {fallback_limit} 条。",
-                    file=sys.stderr,
-                )
-                cluster_input = _select_cluster_evidence(
-                    evidence, review_map, fallback_limit
-                )
-                clusters = analyzer.cluster_evidence(cluster_input)
+            clusters = None
+            for attempt, candidate in enumerate(cluster_attempts):
+                if attempt:
+                    print(
+                        f"聚类证据校验失败，降级重试前 {len(candidate)} 条。",
+                        file=sys.stderr,
+                    )
+                try:
+                    clusters = analyzer.cluster_evidence(candidate, strict=bool(attempt))
+                    cluster_input = candidate
+                    break
+                except AnalysisFormatError:
+                    if attempt == len(cluster_attempts) - 1:
+                        raise
             opportunities = build_opportunities(
                 clusters, evidence_map.values(), review_map
             )

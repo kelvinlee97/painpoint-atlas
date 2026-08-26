@@ -374,7 +374,9 @@ class OpenAIAnalyzer:
             for index, opportunity in enumerate(opportunities)
         ]
 
-    def cluster_evidence(self, evidence: list[Evidence]) -> list[Cluster]:
+    def cluster_evidence(
+        self, evidence: list[Evidence], *, strict: bool = False
+    ) -> list[Cluster]:
         if not evidence:
             return []
         evidence_ids = {item.review_id for item in evidence}
@@ -392,6 +394,12 @@ class OpenAIAnalyzer:
                                 "所有 label、summary、affected_user、validation_action 都用中文。"
                                 "只使用输入中的证据 ID，每个 ID 必须且只能出现一次；"
                                 "不要写空泛的‘提升体验’，validation_action 必须是可在一周内执行的低成本验证。"
+                                + (
+                                    "输出前先列出输入中的全部 evidence_id，逐一分配；"
+                                    "整个响应中每个 ID 只能出现一次，不能遗漏、重复或创建新 ID。"
+                                    if strict
+                                    else ""
+                                )
                             ),
                         }
                     ],
