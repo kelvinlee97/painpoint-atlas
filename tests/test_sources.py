@@ -151,7 +151,7 @@ class SourceParsingTests(unittest.TestCase):
         self.assertEqual(metadata["description"], "Plan tasks and keep projects moving.")
         self.assertEqual(metadata["developer"], "Example Labs")
 
-    def test_probe_fails_when_a_store_has_no_low_star_reviews(self):
+    def test_probe_fails_when_no_store_has_low_star_reviews(self):
         from opportunity_radar.models import App
         from opportunity_radar.sources import probe_sources
 
@@ -183,6 +183,54 @@ class SourceParsingTests(unittest.TestCase):
 
         self.assertFalse(report.passed)
         self.assertIn("app_store", report.stores)
+
+    def test_probe_allows_one_store_to_have_no_low_star_reviews(self):
+        from opportunity_radar.models import App, Review
+        from opportunity_radar.sources import probe_sources
+
+        class FakeSource:
+            def __init__(self, has_reviews):
+                self.has_reviews = has_reviews
+
+            def discover_apps(self, category, limit):
+                return [
+                    App(
+                        store="fake",
+                        external_id=f"{category}-{index}",
+                        name="Example",
+                        category=category,
+                        rank=index + 1,
+                        url="https://example.test/app",
+                    )
+                    for index in range(limit)
+                ]
+
+            def fetch_reviews(self, app):
+                return [
+                    Review(
+                        store="fake",
+                        external_id="review-1",
+                        app_external_id=app.external_id,
+                        rating=1,
+                        title="Broken",
+                        body="It fails.",
+                        published_at=None,
+                        version=None,
+                        source_url="https://example.test/review-1",
+                    )
+                ] if self.has_reviews else []
+
+        report = probe_sources(
+            {
+                "app_store": FakeSource(False),
+                "google_play": FakeSource(True),
+            },
+            categories=("productivity",),
+            sample_size=1,
+            minimum_apps=20,
+        )
+
+        self.assertTrue(report.passed)
 
 
 if __name__ == "__main__":

@@ -257,7 +257,6 @@ class StoreProbe:
             not self.errors
             and bool(self.apps_by_category)
             and all(count >= 20 for count in self.apps_by_category.values())
-            and self.low_star_reviews > 0
         )
 
 
@@ -267,7 +266,11 @@ class ProbeReport:
 
     @property
     def passed(self) -> bool:
-        return bool(self.stores) and all(probe.passed for probe in self.stores.values())
+        return (
+            bool(self.stores)
+            and all(probe.passed for probe in self.stores.values())
+            and any(probe.low_star_reviews > 0 for probe in self.stores.values())
+        )
 
 
 def probe_sources(
