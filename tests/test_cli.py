@@ -96,7 +96,7 @@ class CliTests(unittest.TestCase):
                 output = write_static_dashboard("ignored.sqlite3", directory)
 
             self.assertEqual(output, Path(directory) / "index.html")
-            self.assertIn("Opportunity Radar", output.read_text(encoding="utf-8"))
+            self.assertIn("Painpoint Atlas", output.read_text(encoding="utf-8"))
 
     def test_dashboard_html_contains_opportunity_details(self):
         from opportunity_radar.dashboard import render_dashboard
@@ -115,7 +115,8 @@ class CliTests(unittest.TestCase):
             }],
         })
 
-        self.assertIn("Opportunity Radar", html)
+        self.assertIn("Painpoint Atlas", html)
+        self.assertIn("DATA SNAPSHOT", html)
         self.assertIn("导出失败", html)
         self.assertIn("值得优先验证", html)
         self.assertIn('id="search"', html)

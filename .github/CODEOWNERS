@@ -1,0 +1,4 @@
+# Changes to privileged automation and security policy need explicit review.
+/.github/workflows/ @kelvinlee97
+/.github/CODEOWNERS @kelvinlee97
+/SECURITY.md @kelvinlee97

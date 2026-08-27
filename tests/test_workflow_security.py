@@ -7,22 +7,46 @@ class WorkflowSecurityTests(unittest.TestCase):
         workflow = Path(".github/workflows/refresh-pages.yml").read_text(
             encoding="utf-8"
         )
+        refresh_job = workflow.split("  refresh:\n", 1)[1].split(
+            "  persist:\n", 1
+        )[0]
+        persist_job = workflow.split("  persist:\n", 1)[1].split(
+            "  deploy:\n", 1
+        )[0]
+        deploy_job = workflow.split("  deploy:\n", 1)[1]
 
         self.assertEqual(
             workflow.count("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"), 1
         )
-        secret_line = workflow.index(
-            "OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"
-        )
-        refresh_step = workflow.index("- name: Refresh collected data and analysis")
-        self.assertGreater(secret_line, refresh_step)
-        self.assertNotIn("env:\n      OPENAI_API_KEY", workflow)
-        self.assertIn("if: github.ref == 'refs/heads/main'", workflow)
-        self.assertIn("persist-credentials: false", workflow)
-        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)
+        self.assertIn("permissions: {}", workflow)
+        self.assertIn("    permissions:\n      contents: read", refresh_job)
+        self.assertNotIn("contents: write", refresh_job)
+        self.assertNotIn("pages: write", refresh_job)
+        self.assertNotIn("id-token: write", refresh_job)
+        self.assertIn("needs: refresh", persist_job)
+        self.assertIn("contents: write", persist_job)
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", persist_job)
+        self.assertNotIn("OPENAI_API_KEY", persist_job)
+        self.assertIn("needs: refresh", deploy_job)
+        self.assertIn("contents: read", deploy_job)
+        self.assertIn("pages: write", deploy_job)
+        self.assertIn("id-token: write", deploy_job)
+        self.assertNotIn("OPENAI_API_KEY", deploy_job)
+        self.assertNotIn("GITHUB_TOKEN", deploy_job)
+        self.assertNotIn("Build static Dashboard", refresh_job)
+        self.assertIn("Build static Dashboard without API secret", deploy_job)
+        self.assertEqual(workflow.count("actions/download-artifact@"), 2)
+        self.assertEqual(workflow.count("actions/upload-artifact@"), 1)
+        self.assertIn("retention-days: 1", workflow)
+        self.assertIn("if: github.ref == 'refs/heads/main'", refresh_job)
+        self.assertIn("if: github.ref == 'refs/heads/main'", persist_job)
+        self.assertIn("if: github.ref == 'refs/heads/main'", deploy_job)
+        self.assertEqual(workflow.count("persist-credentials: false"), 3)
         for action in (
             "actions/checkout@",
             "actions/setup-python@",
+            "actions/upload-artifact@",
+            "actions/download-artifact@",
             "actions/configure-pages@",
             "actions/upload-pages-artifact@",
             "actions/deploy-pages@",

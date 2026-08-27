@@ -3,6 +3,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
 from pathlib import Path
 
+from .redaction import sanitize_public_text
 from .storage import Database
 
 
@@ -48,16 +49,18 @@ def load_dashboard_payload(path: str) -> dict:
                 app = apps.get(f"{review.store}:{review.app_external_id}")
                 if app:
                     app_rows[f"{app.store}:{app.external_id}"] = {
-                        "name": app.name,
-                        "category": app.category,
-                        "description": app.description,
-                        "developer": app.developer,
-                        "price": app.price,
+                        "name": sanitize_public_text(app.name),
+                        "category": sanitize_public_text(app.category),
+                        "description": sanitize_public_text(app.description),
+                        "developer": sanitize_public_text(app.developer),
+                        "price": sanitize_public_text(app.price),
                         "url": app.url,
                     }
                 evidence_rows.append(
                     {
-                        "app_name": app.name if app else review.app_external_id,
+                        "app_name": sanitize_public_text(
+                            app.name if app else review.app_external_id
+                        ),
                         "store": review.store,
                         "rating": review.rating,
                         "quote": item.quote,
@@ -66,20 +69,22 @@ def load_dashboard_payload(path: str) -> dict:
                 )
             opportunities.append(
                 {
-                    "label": label,
-                    "summary": summary,
-                    "affected_user": affected_user,
-                    "validation_action": validation_action,
+                    "label": sanitize_public_text(label),
+                    "summary": sanitize_public_text(summary),
+                    "affected_user": sanitize_public_text(affected_user),
+                    "validation_action": sanitize_public_text(validation_action),
                     "score": score,
                     "review_count": review_count,
                     "app_count": app_count,
                     "average_severity": average_severity,
                     "average_paid_signal": average_paid_signal,
-                    "failure_stage": failure_stage,
-                    "root_cause": root_cause,
-                    "user_consequence": user_consequence,
-                    "commercial_implication": commercial_implication,
-                    "decision": decision,
+                    "failure_stage": sanitize_public_text(failure_stage),
+                    "root_cause": sanitize_public_text(root_cause),
+                    "user_consequence": sanitize_public_text(user_consequence),
+                    "commercial_implication": sanitize_public_text(
+                        commercial_implication
+                    ),
+                    "decision": sanitize_public_text(decision),
                     "analysis_confidence": analysis_confidence,
                     "apps": list(app_rows.values()),
                     "evidence": evidence_rows,
@@ -103,7 +108,7 @@ def render_dashboard(payload: dict) -> str:
     return f'''<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Opportunity Radar · Painpoint Atlas</title>
+<title>Painpoint Atlas · Opportunity Radar</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
 <style>
 :root {{ color-scheme:light; --ink:#102a43; --text:#0f172a; --muted:#475569; --line:#dbeafe; --panel:#fff; --surface:#f8fafc; --surface-alt:#eef4fb; --primary:#1e40af; --blue:#3b82f6; --amber:#d97706; --amber-bg:#fff7ed; --soft-blue:#eff6ff; --ring:#1e40af; }}
@@ -121,7 +126,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 @media (prefers-reduced-motion:reduce) {{ *,*::before,*::after {{ scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }} }}
 </style></head>
 <body><a class="skip-link" href="#opportunity-list">跳到机会列表</a><main>
-<header class="masthead"><div><div class="eyebrow">Painpoint Atlas / Market intelligence</div><h1>Opportunity Radar</h1><p class="lead">把 App Store 与 Google Play 的差评，拆成失败链路、用户代价和可验证的商业判断。</p></div><div class="meta"><strong>LOCAL SNAPSHOT</strong><span>数据用于问题发现，不等同于收入预测</span></div></header>
+<header class="masthead"><div><div class="eyebrow">Painpoint Atlas / Opportunity Radar</div><h1>Painpoint Atlas</h1><p class="lead">把 App Store 与 Google Play 的差评，拆成失败链路、用户代价和可验证的商业判断。</p></div><div class="meta"><strong>DATA SNAPSHOT</strong><span>数据用于问题发现，不等同于收入预测</span></div></header>
 <section class="summary" id="summary" aria-label="数据摘要"></section>
 <section class="panel" aria-labelledby="ranking-title"><div class="section-heading"><div><h2 id="ranking-title">机会优先级</h2><p class="caption">按证据覆盖、严重度、付费信号和跨产品重复度排序。</p></div><span class="caption" id="ranking-scope">全部</span></div><ol class="ranking" id="ranking" aria-label="机会优先级排行榜"></ol></section>
 <section class="panel" aria-labelledby="filters-title"><h2 id="filters-title">机会解剖</h2><p class="caption">先定位问题，再阅读证据与商业判断；长内容默认收起。</p><div class="toolbar"><div class="field field-search"><label for="search">查找证据</label><input id="search" type="search" placeholder="搜索问题、App、根因或商业判断" aria-describedby="search-help" autocomplete="off"><p class="helper" id="search-help">搜索会同时匹配机会标题、分析字段和来源 App。</p></div><div class="field"><label for="decision">商业判断</label><select id="decision"><option value="">全部判断</option><option>值得优先验证</option><option>优先作为避坑规则</option><option>暂不进入</option></select></div><button class="reset-button" id="reset" type="button">清除筛选</button></div><p class="result-count" id="result-count" aria-live="polite"></p></section>

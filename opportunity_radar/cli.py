@@ -206,14 +206,16 @@ def _analyze_and_report(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="opportunity-radar")
+    parser = argparse.ArgumentParser(prog="painpoint-atlas")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    probe = subparsers.add_parser("probe-sources", help="验证两商店公开来源")
+    probe = subparsers.add_parser(
+        "probe-sources", help="验证 Apple App Store 与 Google Play 公开来源"
+    )
     probe.add_argument("--sample-size", type=int, default=5)
     probe.add_argument("--minimum-apps", type=int, default=20)
 
-    run = subparsers.add_parser("run", help="采集、分析并生成简报")
+    run = subparsers.add_parser("run", help="采集低星评论、分析并生成机会简报")
     run.add_argument("--db", default="data/opportunity_radar.sqlite3")
     run.add_argument("--reports", default="reports")
     run.add_argument("--sample-size", type=int, default=5)
@@ -222,7 +224,9 @@ def build_parser() -> argparse.ArgumentParser:
     # ponytail: cap one cluster prompt at 40; add batch-merge before increasing it.
     run.add_argument("--cluster-limit", type=int, default=40)
 
-    dashboard = subparsers.add_parser("dashboard", help="启动本地分析 Dashboard")
+    dashboard = subparsers.add_parser(
+        "dashboard", help="启动仅监听本机的分析 Dashboard"
+    )
     dashboard.add_argument("--db", default="data/opportunity_radar.sqlite3")
     dashboard.add_argument("--host", default="127.0.0.1")
     dashboard.add_argument("--port", type=int, default=8000)

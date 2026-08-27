@@ -5,6 +5,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .models import App, Cluster, Evidence, Opportunity, Review
+from .redaction import sanitize_public_text
 
 
 class AnalysisFormatError(ValueError):
@@ -13,6 +14,10 @@ class AnalysisFormatError(ValueError):
 
 class AnalyzerError(RuntimeError):
     pass
+
+
+# ponytail: fixed 2 MiB cap; batch/streaming responses can replace it if the API contract grows.
+MAX_RESPONSE_BYTES = 2_000_000
 
 
 def parse_analysis(payload: dict) -> Evidence:
@@ -149,7 +154,12 @@ def post_json(url: str, headers: dict, payload: dict, *, timeout: int = 60) -> d
     )
     try:
         with urlopen(request, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+            body = response.read(MAX_RESPONSE_BYTES + 1)
+            if len(body) > MAX_RESPONSE_BYTES:
+                raise AnalyzerError("AI response exceeds the 2 MiB limit")
+            return json.loads(body.decode("utf-8"))
+    except AnalyzerError:
+        raise
     except (HTTPError, URLError, TimeoutError, RemoteDisconnected) as exc:
         raise AnalyzerError(f"AI request failed: {exc}") from exc
 
@@ -178,6 +188,8 @@ class OpenAIAnalyzer:
 
     def analyze_review(self, review: Review) -> Evidence:
         review_id = f"{review.store}:{review.external_id}"
+        title = sanitize_public_text(review.title)
+        body = sanitize_public_text(review.body) or ""
         payload = {
             "model": self.model,
             "store": False,
@@ -208,8 +220,8 @@ class OpenAIAnalyzer:
                                 {
                                     "review_id": review_id,
                                     "rating": review.rating,
-                                    "title": review.title,
-                                    "body": review.body,
+                                    "title": title,
+                                    "body": body,
                                 },
                                 ensure_ascii=False,
                             ),
@@ -237,7 +249,7 @@ class OpenAIAnalyzer:
             raise AnalyzerError("OpenAI returned invalid JSON") from exc
         result["review_id"] = review_id
         evidence = parse_analysis(result)
-        source_text = "\n".join(filter(None, (review.title, review.body)))
+        source_text = "\n".join(filter(None, (title, body)))
         if evidence.quote not in source_text:
             raise AnalyzerError("OpenAI quote is not grounded in the source review")
         return evidence
@@ -262,29 +274,29 @@ class OpenAIAnalyzer:
                 app = apps.get(app_key)
                 if app:
                     app_records[app_key] = {
-                        "name": app.name,
-                        "category": app.category,
-                        "description": app.description,
-                        "developer": app.developer,
-                        "price": app.price,
+                        "name": sanitize_public_text(app.name),
+                        "category": sanitize_public_text(app.category),
+                        "description": sanitize_public_text(app.description),
+                        "developer": sanitize_public_text(app.developer),
+                        "price": sanitize_public_text(app.price),
                     }
                 evidence_records.append(
                     {
                         "review_id": review_id,
                         "rating": review.rating,
-                        "pain": item.pain,
-                        "context": item.context,
+                        "pain": sanitize_public_text(item.pain),
+                        "context": sanitize_public_text(item.context),
                         "severity": item.severity,
                         "paid_signal": item.paid_signal,
-                        "quote": item.quote,
+                        "quote": sanitize_public_text(item.quote),
                     }
                 )
             records.append(
                 {
                     "opportunity_index": index,
-                    "label": opportunity.label,
-                    "summary": opportunity.summary,
-                    "affected_user": opportunity.affected_user,
+                    "label": sanitize_public_text(opportunity.label),
+                    "summary": sanitize_public_text(opportunity.summary),
+                    "affected_user": sanitize_public_text(opportunity.affected_user),
                     "score": opportunity.score,
                     "apps": list(app_records.values()),
                     "evidence": evidence_records,
@@ -364,11 +376,14 @@ class OpenAIAnalyzer:
         return [
             replace(
                 opportunity,
-                failure_stage=by_index[index]["failure_stage"].strip(),
-                root_cause=by_index[index]["root_cause"].strip(),
-                user_consequence=by_index[index]["user_consequence"].strip(),
-                commercial_implication=by_index[index]["commercial_implication"].strip(),
-                decision=by_index[index]["decision"].strip(),
+                failure_stage=sanitize_public_text(by_index[index]["failure_stage"].strip()) or "",
+                root_cause=sanitize_public_text(by_index[index]["root_cause"].strip()) or "",
+                user_consequence=sanitize_public_text(by_index[index]["user_consequence"].strip()) or "",
+                commercial_implication=sanitize_public_text(
+                    by_index[index]["commercial_implication"].strip()
+                )
+                or "",
+                decision=sanitize_public_text(by_index[index]["decision"].strip()) or "",
                 analysis_confidence=float(by_index[index]["confidence"]),
             )
             for index, opportunity in enumerate(opportunities)
@@ -410,7 +425,18 @@ class OpenAIAnalyzer:
                         {
                             "type": "input_text",
                             "text": json.dumps(
-                                [item.__dict__ for item in evidence],
+                                [
+                                    {
+                                        **item.__dict__,
+                                        "pain": sanitize_public_text(item.pain),
+                                        "affected_user": sanitize_public_text(
+                                            item.affected_user
+                                        ),
+                                        "context": sanitize_public_text(item.context),
+                                        "quote": sanitize_public_text(item.quote),
+                                    }
+                                    for item in evidence
+                                ],
                                 ensure_ascii=False,
                             ),
                         }
@@ -449,11 +475,17 @@ class OpenAIAnalyzer:
                 raise AnalysisFormatError("cluster fields must be non-empty strings")
             clusters.append(
                 Cluster(
-                    label=item["label"].strip(),
-                    summary=item["summary"].strip(),
+                    label=sanitize_public_text(item["label"].strip()) or "",
+                    summary=sanitize_public_text(item["summary"].strip()) or "",
                     evidence_ids=ids,
-                    affected_user=item["affected_user"].strip(),
-                    validation_action=item["validation_action"].strip(),
+                    affected_user=sanitize_public_text(
+                        item["affected_user"].strip()
+                    )
+                    or "",
+                    validation_action=sanitize_public_text(
+                        item["validation_action"].strip()
+                    )
+                    or "",
                 )
             )
         if assigned != evidence_ids:
