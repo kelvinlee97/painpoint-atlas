@@ -1,14 +1,11 @@
-name: Refresh and deploy Opportunity Radar
+name: Refresh and deploy Painpoint Atlas
 
 on:
   workflow_dispatch:
   schedule:
     - cron: "30 2 * * *"
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+permissions: {}
 
 concurrency:
   group: opportunity-radar-pages
@@ -18,9 +15,8 @@ jobs:
   refresh:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -47,8 +43,43 @@ jobs:
             --db data/opportunity_radar.sqlite3 \
             --reports reports
 
-      - name: Build static Dashboard
-        run: python -m opportunity_radar build-pages --db data/opportunity_radar.sqlite3 --output site
+      - name: Package refresh output
+        run: |
+          mkdir -p refresh-state
+          cp data/opportunity_radar.sqlite3 refresh-state/opportunity_radar.sqlite3
+          cp "reports/$(date -u +%F).md" refresh-state/report.md
+
+      - name: Upload refresh output
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: refresh-state
+          path: refresh-state
+          if-no-files-found: error
+          retention-days: 1
+
+  persist:
+    needs: refresh
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download refresh output
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: refresh-state
+          path: refresh-state
+
+      - name: Restore refreshed state
+        run: |
+          cp refresh-state/opportunity_radar.sqlite3 data/opportunity_radar.sqlite3
+          cp refresh-state/report.md "reports/$(date -u +%F).md"
 
       # The SQLite file preserves incremental review/evidence state between runs.
       # Use a private repository if the collected data or analysis is not public.
@@ -58,13 +89,45 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f data/opportunity_radar.sqlite3 reports/$(date -u +%F).md
+          git add -f data/opportunity_radar.sqlite3 "reports/$(date -u +%F).md"
           if ! git diff --cached --quiet; then
-            git commit -m "chore: refresh opportunity radar [skip ci]"
+            git commit -m "chore: refresh painpoint atlas [skip ci]"
             trap 'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
             git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             git push
           fi
+
+  deploy:
+    needs: refresh
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Download refresh output
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: refresh-state
+          path: refresh-state
+
+      - name: Build static Dashboard without API secret
+        run: python -m opportunity_radar build-pages --db refresh-state/opportunity_radar.sqlite3 --output site
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

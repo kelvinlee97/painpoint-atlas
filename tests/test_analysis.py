@@ -4,6 +4,23 @@ from unittest.mock import patch
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_post_json_rejects_oversized_response(self):
+        from opportunity_radar.analysis import AnalyzerError, post_json
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, limit=None):
+                return b"x" * (2_000_001)
+
+        with patch("opportunity_radar.analysis.urlopen", return_value=Response()):
+            with self.assertRaisesRegex(AnalyzerError, "2 MiB"):
+                post_json("https://api.example.test", {}, {})
+
     def test_post_json_wraps_remote_disconnect(self):
         from opportunity_radar.analysis import AnalyzerError, post_json
 
@@ -81,7 +98,7 @@ class AnalysisTests(unittest.TestCase):
                 app_external_id="com.example.app",
                 rating=1,
                 title="Broken",
-                body="It fails.",
+                body="It fails. Contact test@example.com.",
                 published_at="2026-08-18",
                 version=None,
                 source_url="https://example.test/review-1",
@@ -93,6 +110,9 @@ class AnalysisTests(unittest.TestCase):
         self.assertFalse(calls[0][2]["store"])
         self.assertNotIn("temperature", calls[0][2])
         self.assertEqual(calls[0][2]["text"]["format"]["type"], "json_schema")
+        request_text = calls[0][2]["input"][1]["content"][0]["text"]
+        self.assertNotIn("test@example.com", request_text)
+        self.assertIn("[redacted-email]", request_text)
 
     def test_openai_analyzer_rejects_quote_outside_review(self):
         from opportunity_radar.analysis import AnalyzerError, OpenAIAnalyzer
@@ -213,7 +233,7 @@ class AnalysisTests(unittest.TestCase):
                 category="productivity",
                 rank=1,
                 url="https://example.test/app",
-                description="A document workspace.",
+                description="A document workspace. Contact test@example.com.",
             )},
             {"google_play:review-1": Evidence(
                 review_id="google_play:review-1",
@@ -242,6 +262,9 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(enriched[0].decision, "值得优先验证")
         self.assertEqual(enriched[0].analysis_confidence, 0.88)
         self.assertIn("Example Docs", calls[0][2]["input"][1]["content"][0]["text"])
+        self.assertNotIn(
+            "test@example.com", calls[0][2]["input"][1]["content"][0]["text"]
+        )
 
 
 if __name__ == "__main__":

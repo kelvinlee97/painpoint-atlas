@@ -1,5 +1,6 @@
 import json
 import unittest
+from unittest.mock import patch
 
 
 APPLE_FIXTURE = {
@@ -92,6 +93,32 @@ GOOGLE_METADATA_FIXTURE = """
 
 
 class SourceParsingTests(unittest.TestCase):
+    def test_fetch_text_rejects_oversized_response(self):
+        from opportunity_radar.sources import fetch_text
+
+        class Headers:
+            def get(self, name):
+                return "2000001" if name == "Content-Length" else None
+
+            def get_content_charset(self):
+                return "utf-8"
+
+        class Response:
+            headers = Headers()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, limit=None):
+                raise AssertionError("oversized response should be rejected by its header")
+
+        with patch("opportunity_radar.sources.urlopen", return_value=Response()):
+            with self.assertRaisesRegex(ValueError, "2 MiB"):
+                fetch_text("https://example.test/source")
+
     def test_apple_parser_keeps_only_low_star_reviews(self):
         from opportunity_radar.sources import parse_apple_reviews
 

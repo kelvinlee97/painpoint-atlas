@@ -3,6 +3,10 @@ import sqlite3
 from pathlib import Path
 
 from .models import App, Cluster, Evidence, Opportunity, Review
+from .redaction import sanitize_public_text
+
+
+PUBLIC_REDACTION_VERSION = 3
 
 
 class Database:
@@ -121,6 +125,7 @@ class Database:
             ),
         ):
             self._ensure_column(table, column, definition)
+        self._migrate_public_text()
         self.connection.commit()
 
     def _ensure_column(self, table: str, column: str, definition: str) -> None:
@@ -132,6 +137,50 @@ class Database:
                 f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
             )
 
+    def _migrate_public_text(self) -> None:
+        version = self.connection.execute("PRAGMA user_version").fetchone()[0]
+        if version >= PUBLIC_REDACTION_VERSION:
+            return
+
+        # ponytail: one full scan for the small committed database; batch this migration if it grows large.
+        for table, columns in (
+            ("apps", ("name", "category", "description", "developer", "price")),
+            ("reviews", ("title", "body")),
+            ("evidence", ("pain", "affected_user", "context", "quote")),
+            (
+                "clusters",
+                ("label", "summary", "affected_user", "validation_action"),
+            ),
+            (
+                "opportunities",
+                (
+                    "label",
+                    "summary",
+                    "affected_user",
+                    "validation_action",
+                    "failure_stage",
+                    "root_cause",
+                    "user_consequence",
+                    "commercial_implication",
+                    "decision",
+                ),
+            ),
+            ("runs", ("details",)),
+        ):
+            selected = ", ".join(columns)
+            updates = ", ".join(f"{column} = ?" for column in columns)
+            for row in self.connection.execute(
+                f"SELECT id, {selected} FROM {table}"
+            ).fetchall():
+                original = row[1:]
+                sanitized = tuple(sanitize_public_text(value) for value in original)
+                if sanitized != original:
+                    self.connection.execute(
+                        f"UPDATE {table} SET {updates} WHERE id = ?",
+                        (*sanitized, row[0]),
+                    )
+        self.connection.execute(f"PRAGMA user_version = {PUBLIC_REDACTION_VERSION}")
+
     def insert_app(self, app: App) -> bool:
         cursor = self.connection.execute(
             """
@@ -142,13 +191,13 @@ class Database:
             (
                 app.store,
                 app.external_id,
-                app.name,
-                app.category,
+                sanitize_public_text(app.name),
+                sanitize_public_text(app.category),
                 app.rank,
                 app.url,
-                app.description,
-                app.developer,
-                app.price,
+                sanitize_public_text(app.description),
+                sanitize_public_text(app.developer),
+                sanitize_public_text(app.price),
             ),
         )
         self.connection.execute(
@@ -160,9 +209,9 @@ class Database:
             WHERE store = ? AND external_id = ?
             """,
             (
-                app.description,
-                app.developer,
-                app.price,
+                sanitize_public_text(app.description),
+                sanitize_public_text(app.developer),
+                sanitize_public_text(app.price),
                 app.store,
                 app.external_id,
             ),
@@ -183,8 +232,8 @@ class Database:
                 review.external_id,
                 review.app_external_id,
                 review.rating,
-                review.title,
-                review.body,
+                sanitize_public_text(review.title),
+                sanitize_public_text(review.body),
                 review.published_at,
                 review.version,
                 review.source_url,
@@ -207,12 +256,12 @@ class Database:
             """,
             (
                 evidence.review_id,
-                evidence.pain,
-                evidence.affected_user,
-                evidence.context,
+                sanitize_public_text(evidence.pain),
+                sanitize_public_text(evidence.affected_user),
+                sanitize_public_text(evidence.context),
                 evidence.severity,
                 evidence.paid_signal,
-                evidence.quote,
+                sanitize_public_text(evidence.quote),
                 evidence.confidence,
             ),
         )
@@ -235,7 +284,15 @@ class Database:
             FROM reviews ORDER BY id
             """
         ).fetchall()
-        return [Review(*row) for row in rows]
+        return [
+            Review(
+                *row[:4],
+                sanitize_public_text(row[4]),
+                sanitize_public_text(row[5]),
+                *row[6:],
+            )
+            for row in rows
+        ]
 
     def get_apps(self) -> list[App]:
         rows = self.connection.execute(
@@ -245,7 +302,20 @@ class Database:
             FROM apps ORDER BY id
             """
         ).fetchall()
-        return [App(*row) for row in rows]
+        return [
+            App(
+                row[0],
+                row[1],
+                sanitize_public_text(row[2]),
+                sanitize_public_text(row[3]),
+                row[4],
+                row[5],
+                sanitize_public_text(row[6]),
+                sanitize_public_text(row[7]),
+                sanitize_public_text(row[8]),
+            )
+            for row in rows
+        ]
 
     def get_evidence(self) -> list[Evidence]:
         rows = self.connection.execute(
@@ -255,7 +325,19 @@ class Database:
             FROM evidence ORDER BY id
             """
         ).fetchall()
-        return [Evidence(*row) for row in rows]
+        return [
+            Evidence(
+                row[0],
+                sanitize_public_text(row[1]),
+                sanitize_public_text(row[2]),
+                sanitize_public_text(row[3]),
+                row[4],
+                row[5],
+                sanitize_public_text(row[6]),
+                row[7],
+            )
+            for row in rows
+        ]
 
     def insert_cluster(self, cluster: Cluster) -> int:
         cursor = self.connection.execute(
@@ -265,10 +347,10 @@ class Database:
             VALUES (?, ?, ?, ?, ?)
             """,
             (
-                cluster.label,
-                cluster.summary,
-                cluster.affected_user,
-                cluster.validation_action,
+                sanitize_public_text(cluster.label),
+                sanitize_public_text(cluster.summary),
+                sanitize_public_text(cluster.affected_user),
+                sanitize_public_text(cluster.validation_action),
                 json.dumps(cluster.evidence_ids),
             ),
         )
@@ -287,21 +369,21 @@ class Database:
             """,
             (
                 cluster_id,
-                opportunity.label,
-                opportunity.summary,
-                opportunity.affected_user,
-                opportunity.validation_action,
+                sanitize_public_text(opportunity.label),
+                sanitize_public_text(opportunity.summary),
+                sanitize_public_text(opportunity.affected_user),
+                sanitize_public_text(opportunity.validation_action),
                 json.dumps(opportunity.evidence_ids),
                 opportunity.score,
                 opportunity.review_count,
                 opportunity.app_count,
                 opportunity.average_severity,
                 opportunity.average_paid_signal,
-                opportunity.failure_stage,
-                opportunity.root_cause,
-                opportunity.user_consequence,
-                opportunity.commercial_implication,
-                opportunity.decision,
+                sanitize_public_text(opportunity.failure_stage),
+                sanitize_public_text(opportunity.root_cause),
+                sanitize_public_text(opportunity.user_consequence),
+                sanitize_public_text(opportunity.commercial_implication),
+                sanitize_public_text(opportunity.decision),
                 opportunity.analysis_confidence,
             ),
         )
@@ -311,7 +393,11 @@ class Database:
     def insert_run(self, kind: str, status: str, details: dict) -> int:
         cursor = self.connection.execute(
             "INSERT INTO runs (kind, status, details) VALUES (?, ?, ?)",
-            (kind, status, json.dumps(details, ensure_ascii=False)),
+            (
+                kind,
+                status,
+                sanitize_public_text(json.dumps(details, ensure_ascii=False)),
+            ),
         )
         self.connection.commit()
         return int(cursor.lastrowid)

@@ -1,3 +1,3 @@
-"""Local-first opportunity radar for software and AI tool feedback."""
+"""Painpoint Atlas: local-first market intelligence from app feedback."""
 
 __version__ = "0.1.0"

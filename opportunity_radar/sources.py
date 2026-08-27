@@ -26,6 +26,9 @@ CATEGORIES = {
     },
 }
 
+# ponytail: fixed 2 MiB cap; raise it only after measuring a legitimate source payload above it.
+MAX_RESPONSE_BYTES = 2_000_000
+
 
 def _label(value):
     if isinstance(value, dict):
@@ -169,13 +172,23 @@ def fetch_text(url: str, *, timeout: int = 30) -> str:
     request = Request(
         url,
         headers={
-            "User-Agent": "opportunity-radar/0.1 (+local research)",
+            "User-Agent": "painpoint-atlas/0.1 (+local research)",
             "Accept-Language": "en-US,en;q=0.9",
         },
     )
     with urlopen(request, timeout=timeout) as response:
+        content_length = response.headers.get("Content-Length")
+        try:
+            too_large = bool(content_length) and int(content_length) > MAX_RESPONSE_BYTES
+        except (TypeError, ValueError):
+            too_large = False
+        if too_large:
+            raise ValueError("source response exceeds the 2 MiB limit")
+        body = response.read(MAX_RESPONSE_BYTES + 1)
+        if len(body) > MAX_RESPONSE_BYTES:
+            raise ValueError("source response exceeds the 2 MiB limit")
         charset = response.headers.get_content_charset() or "utf-8"
-        return response.read().decode(charset, "replace")
+        return body.decode(charset, "replace")
 
 
 class AppleSource:

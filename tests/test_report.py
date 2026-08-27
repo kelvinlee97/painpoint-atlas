@@ -2,6 +2,67 @@ import unittest
 
 
 class ReportTests(unittest.TestCase):
+    def test_report_redacts_untrusted_evidence_and_analysis_text(self):
+        from opportunity_radar.models import App, Evidence, Opportunity, Review
+        from opportunity_radar.report import render_report
+
+        evidence_id = "google_play:review-1"
+        raw = (
+            "Contact test@example.com, visit https://private.example/u/alice, "
+            "call +1 555-123-4567, or message @alice."
+        )
+        opportunity = Opportunity(
+            label="Export failures",
+            summary="Users cannot export reports",
+            affected_user="Small teams",
+            validation_action="Interview five teams",
+            evidence_ids=(evidence_id,),
+            score=72.5,
+            review_count=3,
+            app_count=2,
+            average_severity=4.0,
+            average_paid_signal=2.0,
+            root_cause=raw,
+        )
+        report = render_report(
+            [opportunity],
+            {evidence_id: Evidence(evidence_id, "Pain", "Users", "Context", 4, 2, raw, 0.9)},
+            {
+                evidence_id: Review(
+                    "google_play",
+                    "review-1",
+                    "com.example.app",
+                    1,
+                    None,
+                    raw,
+                    "2026-08-20",
+                    None,
+                    "https://example.test/review-1",
+                )
+            },
+            {
+                "google_play:com.example.app": App(
+                    "google_play",
+                    "com.example.app",
+                    raw,
+                    raw,
+                    1,
+                    "https://example.test/app",
+                    raw,
+                    raw,
+                    raw,
+                )
+            },
+            generated_at="2026-08-25",
+        )
+
+        self.assertIn("[redacted-email]", report)
+        self.assertIn("[redacted-phone]", report)
+        self.assertIn("[redacted-url]", report)
+        self.assertNotIn("test@example.com", report)
+        self.assertNotIn("private.example", report)
+        self.assertNotIn("+1 555-123-4567", report)
+
     def test_report_contains_ranked_opportunity_and_source_link(self):
         from opportunity_radar.models import App, Evidence, Opportunity, Review
         from opportunity_radar.report import render_report
@@ -67,7 +128,7 @@ class ReportTests(unittest.TestCase):
             [opportunity], evidence, reviews, apps, generated_at="2026-08-25"
         )
 
-        self.assertIn("# Opportunity Radar", report)
+        self.assertIn("# Painpoint Atlas", report)
         self.assertIn("Export failures", report)
         self.assertIn("72.5", report)
         self.assertIn("https://example.test/review-1", report)
@@ -76,6 +137,7 @@ class ReportTests(unittest.TestCase):
         self.assertIn("A document workspace for small teams.", report)
         self.assertIn("导出链路不可靠", report)
         self.assertIn("商业判断", report)
+        self.assertIn("分析链路", report)
 
 
 if __name__ == "__main__":
