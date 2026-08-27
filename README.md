@@ -80,7 +80,7 @@ python3 -m opportunity_radar build-pages
 1. 在 `main` 上运行测试。
 2. 用 `OPENAI_API_KEY` 和 `OPENAI_MODEL` 运行采集与分析。
 3. 生成 SQLite 增量状态、当天 Markdown 报告和静态 Dashboard。
-4. 提交数据库与报告，并部署 `site/` 到 GitHub Pages。
+4. 将数据库与报告提交到一次性自动化分支，创建并 squash 合并 PR，再部署 `site/` 到 GitHub Pages。
 
 默认每天 **02:30 UTC** 运行，也可以手动触发。
 
@@ -91,7 +91,7 @@ python3 -m opportunity_radar build-pages
 3. 在 Variables 创建 `OPENAI_MODEL`；不创建时，工作流使用 `gpt-5.6-luna`。
 4. Actions → **Refresh and deploy Painpoint Atlas** → Run workflow。
 
-工作流只允许在 `main` 上运行带 key 的刷新步骤。`main` 应保持 PR 审查、禁止删除和禁止强制推送等保护规则。
+工作流只允许在 `main` 上运行带 key 的刷新步骤。刷新状态通过自动化 PR 写回，不绕过 `main` 的 PR、禁止删除和禁止强制推送等保护规则。
 
 ### Secret 安全配置
 
@@ -136,7 +136,7 @@ export OPENAI_MODEL='gpt-5.6-luna'
 | `opportunity_radar/storage.py` | 保存 App、评论、证据、机会和运行状态 |
 | `opportunity_radar/report.py` | 生成中文 Markdown 分析报告 |
 | `opportunity_radar/dashboard.py` | 生成本地与静态 HTML Dashboard |
-| `.github/workflows/refresh-pages.yml` | 测试、刷新、提交状态并部署 Pages |
+| `.github/workflows/refresh-pages.yml` | 测试、刷新、通过自动化 PR 持久化状态并部署 Pages |
 
 ## 公开数据与限制
 
