@@ -90,6 +90,7 @@ python3 -m opportunity_radar build-pages
 2. Settings → Secrets and variables → Actions → Repository secrets，创建 `OPENAI_API_KEY`。
 3. 在 Variables 创建 `OPENAI_MODEL`；不创建时，工作流使用 `gpt-5.6-luna`。
 4. Actions → **Refresh and deploy Painpoint Atlas** → Run workflow。
+5. Settings → Actions → General → Workflow permissions，启用 **Allow GitHub Actions to create and approve pull requests**；默认 workflow 权限保持为只读。
 
 工作流只允许在 `main` 上运行带 key 的刷新步骤。刷新状态通过自动化 PR 写回，不绕过 `main` 的 PR、禁止删除和禁止强制推送等保护规则。
 
