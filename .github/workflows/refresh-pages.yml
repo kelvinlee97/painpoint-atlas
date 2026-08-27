@@ -63,6 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -83,19 +84,32 @@ jobs:
 
       # The SQLite file preserves incremental review/evidence state between runs.
       # Use a private repository if the collected data or analysis is not public.
-      - name: Persist state
+      - name: Persist state through pull request
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="automation/refresh-${GITHUB_RUN_ID}"
+          git switch -c "$branch"
           git add -f data/opportunity_radar.sqlite3 "reports/$(date -u +%F).md"
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: refresh painpoint atlas [skip ci]"
-            trap 'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
-            git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-            git push
+          if git diff --cached --quiet; then
+            exit 0
           fi
+          git commit -m "chore: refresh painpoint atlas [skip ci]"
+          trap 'git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"' EXIT
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --set-upstream origin "$branch"
+          pr_url="$(gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head "$branch" \
+            --title "chore: refresh painpoint atlas" \
+            --body "Automated refresh of the public SQLite state and daily report.")"
+          gh pr merge "$pr_url" \
+            --repo "$GITHUB_REPOSITORY" \
+            --squash \
+            --delete-branch
 
   deploy:
     needs: refresh
