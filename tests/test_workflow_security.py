@@ -14,6 +14,8 @@ class WorkflowSecurityTests(unittest.TestCase):
             "  deploy:\n", 1
         )[0]
         deploy_job = workflow.split("  deploy:\n", 1)[1]
+        publish_job = deploy_job.split("  publish:\n", 1)[1]
+        deploy_job = deploy_job.split("  publish:\n", 1)[0]
 
         self.assertEqual(
             workflow.count("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"), 1
@@ -47,7 +49,17 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn("if: github.ref == 'refs/heads/main'", refresh_job)
         self.assertIn("if: github.ref == 'refs/heads/main'", persist_job)
         self.assertIn("if: github.ref == 'refs/heads/main'", deploy_job)
-        self.assertEqual(workflow.count("persist-credentials: false"), 3)
+        self.assertIn("github.event_name != 'push'", refresh_job)
+        self.assertIn("github.event_name != 'push'", persist_job)
+        self.assertIn("github.event_name != 'push'", deploy_job)
+        self.assertIn("github.event_name == 'push'", publish_job)
+        self.assertIn("pages: write", publish_job)
+        self.assertIn("id-token: write", publish_job)
+        self.assertNotIn("contents: write", publish_job)
+        self.assertNotIn("OPENAI_API_KEY", publish_job)
+        self.assertNotIn("actions/download-artifact@", publish_job)
+        self.assertIn("build-pages --db data/opportunity_radar.sqlite3", publish_job)
+        self.assertEqual(workflow.count("persist-credentials: false"), 4)
         for action in (
             "actions/checkout@",
             "actions/setup-python@",
