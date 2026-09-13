@@ -169,6 +169,20 @@ def _analyze_and_report(args: argparse.Namespace) -> int:
             )
             print(f"高级分析未完成：{exc}", file=sys.stderr)
             return 5
+        if not opportunities and database.count_opportunities():
+            database.insert_run(
+                "run",
+                "degraded",
+                {
+                    "reason": "new analysis produced no qualified opportunities",
+                    "reviews": len(reviews),
+                    "evidence": len(evidence),
+                    "clustered_evidence": len(cluster_input),
+                    "failures": failures,
+                },
+            )
+            print("新分析未产生合格机会，保留上一期结果。", file=sys.stderr)
+            return 0
         database.clear_analysis()
         cluster_ids = {}
         for cluster in clusters:
