@@ -1,10 +1,38 @@
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 class CliTests(unittest.TestCase):
+    def test_empty_refresh_preserves_previous_opportunities(self):
+        from opportunity_radar.cli import _analyze_and_report
+        from opportunity_radar.models import Cluster, Evidence, Review
+        from opportunity_radar.sources import ProbeReport, StoreProbe
+
+        review = Review("store", "r1", "app1", 1, None, "broken", None, None, "url")
+        evidence = Evidence("store:r1", "pain", "users", "context", 4, 0, "broken", 0.8)
+        database = MagicMock()
+        database.get_reviews.return_value = [review]
+        database.get_apps.return_value = []
+        database.get_evidence.return_value = [evidence]
+        database.count_opportunities.return_value = 1
+        analyzer = MagicMock()
+        analyzer.enrich_opportunities.return_value = []
+        analyzer.cluster_evidence.return_value = [
+            Cluster("label", "summary", ("store:r1",), "users", "interview")
+        ]
+        probe = ProbeReport({"store": StoreProbe("store", {"category": 20}, 1, ())})
+        args = Namespace(sample_size=1, minimum_apps=20, db=":memory:", reports="reports", review_limit_per_app=1, cluster_limit=40)
+
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "key", "OPENAI_MODEL": "model"}), patch("opportunity_radar.cli._run_probe", return_value=probe), patch("opportunity_radar.cli._collect_reviews"), patch("opportunity_radar.cli.Database", return_value=database), patch("opportunity_radar.cli.OpenAIAnalyzer", return_value=analyzer), patch("opportunity_radar.cli.build_opportunities", return_value=[]):
+            result = _analyze_and_report(args)
+
+        self.assertEqual(result, 0)
+        database.clear_analysis.assert_not_called()
+        self.assertEqual(database.insert_run.call_args.args[1], "degraded")
+
     def test_probe_report_json_has_store_status_and_counts(self):
         from opportunity_radar.cli import probe_report_dict
         from opportunity_radar.sources import ProbeReport, StoreProbe

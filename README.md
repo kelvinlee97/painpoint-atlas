@@ -102,7 +102,7 @@ python3 -m opportunity_radar build-pages
 3. 生成 SQLite 增量状态、当天 Markdown 报告和静态 Dashboard。
 4. 将数据库与报告提交到一次性自动化分支，创建并 squash 合并 PR，再部署 `site/` 到 GitHub Pages。
 
-默认每天 **02:30 UTC** 运行，也可以手动触发。每次推送到 `main` 还会单独触发一次只读构建：不调用 API，直接用仓库里已提交的 SQLite 重新生成 `site/` 并部署，所以页面不会落后于 `main`。
+默认每天 **02:30 UTC** 运行，也可以手动触发。每次推送到 `main` 都会重新采集和分析、持久化结果并部署；自动持久化合并带有 `[skip ci]`，不会形成刷新循环。若新分析未产生达到门槛的机会，系统会保存新证据但保留上一期分析，避免偶发模型退化清空 Dashboard。
 
 首次配置：
 
