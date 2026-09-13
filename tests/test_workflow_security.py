@@ -50,6 +50,8 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn("if: github.ref == 'refs/heads/main'", persist_job)
         self.assertIn("if: github.ref == 'refs/heads/main'", deploy_job)
         self.assertIn("github.event_name != 'push'", refresh_job)
+        self.assertIn("github.event_name != 'push'", persist_job)
+        self.assertIn("github.event_name != 'push'", deploy_job)
         self.assertIn("github.event_name == 'push'", publish_job)
         self.assertIn("pages: write", publish_job)
         self.assertIn("id-token: write", publish_job)

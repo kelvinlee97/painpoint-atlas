@@ -61,7 +61,7 @@ jobs:
 
   persist:
     needs: refresh
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -115,7 +115,7 @@ jobs:
 
   deploy:
     needs: refresh
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
