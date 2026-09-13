@@ -98,6 +98,23 @@ class CliTests(unittest.TestCase):
             self.assertEqual(output, Path(directory) / "index.html")
             self.assertIn("Painpoint Atlas", output.read_text(encoding="utf-8"))
 
+    def test_dashboard_uses_latest_successful_analysis_scope(self):
+        from opportunity_radar.dashboard import load_dashboard_payload
+        from opportunity_radar.storage import Database
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "atlas.sqlite3")
+            database = Database(path)
+            self.assertIsNone(load_dashboard_payload(path)["analysis"]["generated_at"])
+            database.insert_run("run", "success", {"clustered_evidence": 40})
+            database.insert_run("run", "success", {"clustered_evidence": 20})
+            database.insert_run("run", "failed", {"clustered_evidence": 10})
+            database.close()
+            payload = load_dashboard_payload(path)
+            self.assertEqual(payload["analysis"]["clustered_evidence"], 20)
+            self.assertTrue(payload["analysis"]["generated_at"])
+            self.assertEqual(payload["summary"]["evidence"], 0)
+
     def test_dashboard_html_contains_opportunity_details(self):
         from opportunity_radar.dashboard import render_dashboard
 
